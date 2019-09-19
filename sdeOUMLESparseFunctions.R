@@ -11,40 +11,51 @@
 # Output: 
 # - gamma and sigma estimates
 
-logLikelihoodOU <- function(X, t, gamma, sigma) {
+likelihoodOU <- function(X, t, g, s) {
         n <- length(X)
         deltaT <- t[2] - t[1] # assume equal spacing
-        termOne <- (n / 2) * (log(gamma) - 
-                              log(pi * sigma^2 * (1 - exp(-2 * gamma * deltaT))))
-        termTwo <- gamma / (sigma^2 * (1 - exp(-2 * gamma * deltaT))) *
-                    sum((X[2:n] - X[1:(n-1)] * exp(-gamma * deltaT))^2)
+        termOne <- (g / (2 * pi * (s^2 / 2) * (1 - exp(-2 * g * deltaT))))^(n / 2)
+        termTwo1 <- (-g / (2 * (s^2 / 2) * (1 - exp(-2 * g * deltaT))))
+        termTwo2 <- sum((X[2:n] - X[1:(n-1)] * exp(-g * deltaT))^2)
+        termTwo <- exp(termTwo1 * termTwo2)
+        res <- termOne * termTwo
+        res
+}
+
+logLikelihoodOU <- function(X, t, g, s) {
+        n <- length(X)
+        deltaT <- t[2] - t[1] # assume equal spacing
+        termOne <- (n / 2) * (log(g) - 
+                              log(pi * s^2 * (1 - exp(-2 * g * deltaT))))
+        termTwo <- g / (s^2 * (1 - exp(-2 * g * deltaT))) *
+                    sum((X[2:n] - X[1:(n-1)] * exp(-g * deltaT))^2)
         logL <- termOne - termTwo
         logL
 }
 
-.dldgamma <- function(X, t, gamma, sigma) {
+.dldgamma <- function(X, t, g, s) {
         n <- length(X)
         deltaT <- t[2] - t[1] # assume equal spacing
-        termOne <- (n / 2) * (1 - exp(-2 * gamma * deltaT) - 
-                              2 * gamma * deltaT * exp(-2 * gamma * deltaT)) / 
-                                (gamma * (1 - exp(-2 * gamma * deltaT)))
-        termTwo1 <- 2 * gamma * deltaT * exp(-gamma * deltaT) * 
-                        sum(X[1:(n - 1)] * (X[2:n] - X[1:(n - 1)] * exp(-gamma * deltaT)))
-        termTwo2 <- (1 - exp(-2 * gamma * deltaT) * (1 + 2 * sigma^2 * deltaT)) / 
-                        (1 - exp(-2 * gamma * deltaT))
-        termTwo <- (1 / (sigma^2 * (1 - exp(-2 * gamma * deltaT)))) * 
+        termOne <- (n / 2) * (1 - exp(-2 * g * deltaT) - 
+                              2 * g * deltaT * exp(-2 * g * deltaT)) / 
+                                (g * (1 - exp(-2 * g * deltaT)))
+        termTwo1 <- 2 * g * deltaT * exp(-g * deltaT) * 
+                        sum(X[1:(n - 1)] * (X[2:n] - X[1:(n - 1)] * exp(-g * deltaT)))
+        termTwo2 <- (1 - exp(-2 * g * deltaT) * (1 + 2 * s^2 * deltaT)) / 
+                        (1 - exp(-2 * g * deltaT))
+        termTwo <- (1 / (s^2 * (1 - exp(-2 * g * deltaT)))) * 
                         (termTwo1 - termTwo2)
         res <- termOne - termTwo
         res
 }
 
-.dldsigma <- function(X, t, gamma, sigma) {
+.dldsigma <- function(X, t, g, s) {
         n <- length(X)
         deltaT <- t[2] - t[1] # assume equal spacing
         termOne <- -n / 2 * pi
-        termTwo1 <- 2 * gamma * 
-                        sum((X[2:n] - X[1:(n - 1)] * exp(-gamma * deltaT))^2)
-        termTwo2 <- sigma^3 * (1 - exp(-2 * gamma * deltaT))
+        termTwo1 <- 2 * g * 
+                        sum((X[2:n] - X[1:(n - 1)] * exp(-g * deltaT))^2)
+        termTwo2 <- s^3 * (1 - exp(-2 * g * deltaT))
         termTwo <- termTwo1 / termTwo2
         res <- termOne + termTwo
         res
@@ -55,11 +66,16 @@ mleOptim <- function(X, t, gamma0, sigma0) {
         deltaT <- t[2] - t[1] # assume equal spacing
         if(length(gamma0) == 1 & length(sigma0) == 1) {
                 opt <- optim(par = c(gamma0, sigma0), function(gs) {
-                                     gamma <- gs[1]
-                                     sigma <- gs[2]
-                                     resTmp <- logLikelihoodOU(X = X, t = t, 
-                                                               gamma = gamma, sigma = sigma)
-                                     -resTmp
+                                     g <- gs[1]
+                                     s <- gs[2]
+                                     dldg <- .dldgamma(X = X, t = t,
+                                                       g = g, s = s)
+                                     dlds <- .dldsigma(X = X, t = t,
+                                                       g = g, s = s)
+                                     dldg^2 + dlds^2
+                                     #resTmp <- logLikelihoodOU(X = X, t = t, 
+                                                               #g = g, s = s)
+                                     #-resTmp
                                       }, method = "BFGS", control = list(maxit = 500))
         } else {
                 lenG <- length(gamma0)
@@ -69,11 +85,16 @@ mleOptim <- function(X, t, gamma0, sigma0) {
                 gs0 <- cbind(gamma0, sigma0)
                 optAll <- apply(gs0, 1, function(par) {
                         opt <- optim(par = par, function(gs) {
-                                     gamma <- gs[1]
-                                     sigma <- gs[2]
-                                     resTmp <- logLikelihoodOU(X = X, t = t, 
-                                                               gamma = gamma, sigma = sigma)
-                                     -resTmp
+                                     g <- gs[1]
+                                     s <- gs[2]
+                                     dldg <- .dldgamma(X = X, t = t,
+                                                       g = g, s = s)
+                                     dlds <- .dldsigma(X = X, t = t,
+                                                       g = g, s = s)
+                                     dldg^2 + dlds^2
+                                     #resTmp <- logLikelihoodOU(X = X, t = t, 
+                                                               #g = g, s = s)
+                                     #-resTmp
                                       }, method = "BFGS", control = list(maxit = 500))
                       })
                 optValue <- sapply(optAll, function(o) o$value)
