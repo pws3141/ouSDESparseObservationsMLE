@@ -8,7 +8,6 @@
 # - spline (a, b, c) values for each break
 # - gamma0
 # - sigma0
-
 # Output: 
 # - gamma and sigma estimates
 
@@ -58,30 +57,23 @@ mleOptim <- function(X, t, gamma0, sigma0) {
                 opt <- optim(par = c(gamma0, sigma0), function(gs) {
                                      gamma <- gs[1]
                                      sigma <- gs[2]
-                                     dldg <- .dldgamma(X = X, t = t, 
-                                                       gamma = gamma, sigma = sigma)
-                                     dlds <- .dldsigma(X = X, t = t, 
-                                                       gamma = gamma, sigma = sigma)
-                                     dldg^2 + dlds^2
+                                     resTmp <- logLikelihoodOU(X = X, t = t, 
+                                                               gamma = gamma, sigma = sigma)
+                                     -resTmp
                                       }, method = "BFGS", control = list(maxit = 500))
         } else {
                 lenG <- length(gamma0)
                 lenS <- length(sigma0)
-                if (lenG != lenS) {
-                        lenMax <- max(lenG, lenS)
-                        gamma0 <- rep(gamma0, each = lenS)
-                        sigma0 <- rep(sigma0, length = lenG * lenS)
-                }
+                gamma0 <- rep(gamma0, each = lenS)
+                sigma0 <- rep(sigma0, length = lenG * lenS)
                 gs0 <- cbind(gamma0, sigma0)
                 optAll <- apply(gs0, 1, function(par) {
                         opt <- optim(par = par, function(gs) {
                                      gamma <- gs[1]
                                      sigma <- gs[2]
-                                     dldg <- .dldgamma(X = X, t = t, 
-                                                       gamma = gamma, sigma = sigma)
-                                     dlds <- .dldsigma(X = X, t = t, 
-                                                       gamma = gamma, sigma = sigma)
-                                     dldg^2 + dlds^2
+                                     resTmp <- logLikelihoodOU(X = X, t = t, 
+                                                               gamma = gamma, sigma = sigma)
+                                     -resTmp
                                       }, method = "BFGS", control = list(maxit = 500))
                       })
                 optValue <- sapply(optAll, function(o) o$value)
@@ -109,29 +101,20 @@ mleOptim <- function(X, t, gamma0, sigma0) {
         whichTBreaks <- lapply(seq_len(length(fullBreaks) - 1), function(i) {
                                   bF <- fullBreaks[i+1]
                                   bB <- fullBreaks[i]
-                                  #tMod <- t %% maxBreak
                                   whichT <- which(t < bF & t >= bB)
                                   whichT
                         })
         degree <- c(2, 1, 0)
-        #derivativeDegree <- c(1, 0)
         muTBreaks <- lapply(seq_len(length(fullBreaks) - 1), function(i) {
                                   w <- whichTBreaks[[i]]
                                   tmpSeq <- t[w]
                                   tmpSeqMod <- tmpSeq %% maxBreak
                                   xQuadratic <- outer(tmpSeqMod, degree, "^")
-                                  #xDerivative <- outer(tmpSeqMod,
-                                                       #derivativeDegree, "^")
-                                  #xDerivative[, 1] <- 2 * xDerivative[, 1]
                                   iMod <- i %% maxBreak
                                   if (iMod == 0) iMod <- maxBreak
                                   splineTmp <- spline[iMod,]
                                   muTmp <- as.vector(tcrossprod(splineTmp, xQuadratic))
-                                  #muDerivativeTmp <- as.vector(tcrossprod(splineTmp[-3], 
-                                                                          #xDerivative))
-                                  #yTmp
                                   list(t = tmpSeq, mu = muTmp)
-                                        #muDerivative = muDerivativeTmp)
                         })
         muTBreaks
 }
